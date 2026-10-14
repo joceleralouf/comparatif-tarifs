@@ -20,11 +20,18 @@ header{display:flex;align-items:baseline;gap:14px;padding:18px 26px;border-botto
 header h1{font-size:17px;font-weight:600;letter-spacing:.4px}
 header h1 span{color:var(--accent)}
 header .sub{color:var(--muted);font-size:12px}
-nav{display:flex;gap:4px;padding:10px 26px 0;border-bottom:1px solid var(--line)}
-nav button{background:none;border:none;color:var(--muted);padding:9px 16px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent}
-nav button.on{color:var(--txt);border-bottom-color:var(--accent)}
 main{padding:22px 26px;max-width:1280px;margin:0 auto}
-.tab{display:none}.tab.on{display:block}
+.drops{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0}
+@media(max-width:720px){.drops{grid-template-columns:1fr}main{padding:16px}header{padding:14px 16px;flex-wrap:wrap}}
+.dz{display:flex;flex-direction:column;align-items:center;gap:8px;padding:24px 18px}
+.dz-num{width:28px;height:28px;border-radius:50%;border:1px solid var(--accent);color:var(--accent2);font:600 13px/26px var(--mono);text-align:center}
+.dz.done{border-style:solid;border-color:rgba(76,195,138,.5)}
+.dz-status{font-size:12px;min-height:16px}
+.dz-status .ok{color:var(--down)}.dz-status .ko{color:var(--accent2)}
+details.guide,details.refbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:14px 0}
+details.guide>summary,details.refbox>summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--accent2)}
+.guide-body{padding-top:10px;font-size:13.5px}
+.guide-body ol{padding-left:20px}.guide-body li{margin:7px 0}.guide-body ul{padding-left:18px;margin-top:4px}
 .dz{border:2px dashed var(--line);border-radius:10px;padding:34px;text-align:center;color:var(--muted);cursor:pointer;transition:.15s;background:var(--panel)}
 .dz:hover,.dz.over{border-color:var(--accent);color:var(--txt)}
 .dz b{color:var(--accent2)}
@@ -49,10 +56,13 @@ button.btn:hover{background:var(--accent2)}
 button.btn.ghost{background:transparent;color:var(--accent2);border:1px solid var(--accent)}
 button.btn.sm{padding:4px 10px;font-size:12px}
 select,input[type=text]{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:12.5px;max-width:230px}
-input.pxedit{width:76px;font-family:var(--mono);text-align:right}
+input.pxedit{width:76px;font-family:var(--mono);text-align:right;background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12.5px}
 .muted{color:var(--muted)}.small{font-size:12px}
 .warn{background:rgba(212,149,43,.1);border:1px solid rgba(212,149,43,.4);border-radius:8px;padding:10px 14px;font-size:13px;margin:12px 0}
 .coef-low{color:var(--up);font-weight:600}
+input.pvchg{border-color:var(--accent);color:var(--accent2)}
+a.sugg{color:var(--accent2)}
+#prList table{margin-top:4px}
 #toast{position:fixed;bottom:22px;right:22px;background:var(--panel2);border:1px solid var(--accent);border-radius:8px;padding:12px 18px;opacity:0;transition:.3s;pointer-events:none}
 #toast.show{opacity:1}
 .search{width:260px}
@@ -65,36 +75,52 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px}
   <h1>Comparatif <span>Tarifs</span></h1>
   <div class="sub">Factures MD Boissons · Référentiel prix de revient · Lightspeed</div>
 </header>
-<nav>
-  <button class="on" data-tab="facture">Analyse facture</button>
-  <button data-tab="ref">Référentiel <span id="refCount" class="muted"></span></button>
-  <button data-tab="csv">CSV Lightspeed</button>
-</nav>
 <main>
 
-<!-- ===================== TAB FACTURE ===================== -->
-<div class="tab on" id="tab-facture">
-  <div class="dz" id="dzPdf">Glisse une <b>facture PDF</b> ici (ou clique)<br><span class="small">Format MD Boissons · extraction du code, désignation et PX.U.NET</span></div>
-  <input type="file" id="filePdf" accept=".pdf" hidden>
-  <div id="factureResult"></div>
-</div>
+<details class="guide" id="guide">
+  <summary>Mode d'emploi</summary>
+  <div class="guide-body">
+    <ol>
+      <li><b>Exporte tes articles depuis Lightspeed</b> (Back Office, page Articles, Exporter), en CSV ou Excel. Refais-le avant chaque mise à jour pour partir des prix du jour.</li>
+      <li><b>Glisse l'export</b> dans la case 1, puis <b>la facture PDF</b> MD Boissons dans la case 2.</li>
+      <li><b>Vérifie les liaisons</b> (colonne "Article Lightspeed lié"). Une seule fois par produit, c'est mémorisé ensuite. Pour les spiritueux, lie à l'article "Bouteille X", pas au verre.</li>
+      <li><b>Lis la colonne Évolution</b> : <span class="pill up">▲</span> hausse, <span class="pill down">▼</span> baisse par rapport au prix de revient Lightspeed.</li>
+      <li><b>Ajuste les prix de vente si besoin</b> dans la case "Nouveau PV" (ou clique "coef maintenu" pour garder la même marge malgré la hausse).</li>
+      <li><b>Clique "Fichier pour Lightspeed File import"</b> : il contient les nouveaux prix de revient et prix de vente, uniquement pour les articles qui changent. Tout le reste des fiches est recopié à l'identique.</li>
+      <li><b>Dans Lightspeed</b> : Import, <b>File import (new)</b>, envoie le fichier .xlsx et valide. Vérifie ensuite une ou deux fiches articles.</li>
+      <li><b>Enregistre dans le référentiel</b> pour garder l'historique des prix fournisseur.</li>
+    </ol>
+    <div class="warn"><b>Attention :</b> utilise toujours <b>File import</b>, jamais <b>Price only</b> (qui ne connaît pas le prix de revient et peut effacer des prix de vente). Et réexporte depuis Lightspeed le jour même : l'outil refuse un export d'un autre jour.</div>
+    <p class="muted small">Les données (export, liaisons, référentiel) restent dans ce navigateur uniquement.</p>
+  </div>
+</details>
 
-<!-- ===================== TAB REFERENTIEL ===================== -->
-<div class="tab" id="tab-ref">
+<div class="drops">
+  <div class="dz" id="dzCsv">
+    <div class="dz-num">1</div>
+    <div><b>Export Lightspeed</b> (CSV ou Excel)<br><span class="small">Glisse le fichier ici ou clique</span></div>
+    <div id="csvInfo" class="dz-status"></div>
+  </div>
+  <div class="dz" id="dzPdf">
+    <div class="dz-num">2</div>
+    <div><b>Facture PDF</b> MD Boissons<br><span class="small">Glisse le fichier ici ou clique</span></div>
+    <div id="pdfInfo" class="dz-status"></div>
+  </div>
+</div>
+<input type="file" id="fileCsv" accept=".csv,.xlsx,.xls" hidden>
+<input type="file" id="filePdf" accept=".pdf" hidden>
+
+<section id="factureResult"></section>
+
+<details class="refbox" id="refBox">
+  <summary>Référentiel des prix fournisseur <span id="refCount" class="muted"></span></summary>
   <div class="row">
     <input type="text" class="search" id="refSearch" placeholder="Filtrer le référentiel…">
     <button class="btn ghost sm" id="btnExportRef">Exporter en CSV</button>
     <button class="btn ghost sm" id="btnClearRef" style="border-color:var(--up);color:var(--up)">Vider le référentiel</button>
   </div>
   <div class="card" id="refTable"></div>
-</div>
-
-<!-- ===================== TAB CSV ===================== -->
-<div class="tab" id="tab-csv">
-  <div class="dz" id="dzCsv">Glisse ton <b>export Lightspeed</b> ici, CSV ou XLSX (ou clique)<br><span class="small">L'export XLSX complet du back-office (avec Prix de revient) est lu directement. Remplaçable à tout moment, les liaisons produits sont conservées</span></div>
-  <input type="file" id="fileCsv" accept=".csv,.xlsx,.xls" hidden>
-  <div id="csvInfo"></div>
-</div>
+</details>
 
 </main>
 <div id="toast"></div>
@@ -122,13 +148,8 @@ const toks=s=>norm(s).split(' ').filter(t=>t&&t.length>1&&!STOP.has(t)&&!/^\d+x\
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 
-/* ---------- Tabs ---------- */
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
-  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));
-  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
-  b.classList.add('on');document.getElementById('tab-'+b.dataset.tab).classList.add('on');
-  if(b.dataset.tab==='ref')renderRef();
-});
+/* ---------- Mode d'emploi ouvert au premier usage ---------- */
+try{if(!localStorage.getItem(LS.csv))document.getElementById('guide').open=true}catch(e){}
 
 /* ---------- Dropzones ---------- */
 function wireDZ(dz,input,handler){
@@ -180,14 +201,14 @@ function ingestRows(rows,fname,fmtIn){
   toast(items.length+' articles charges'+(iCost>=0?' (avec prix de revient)':''));
 }
 function renderCsvInfo(){
-  const c=store.csv,el=document.getElementById('csvInfo');
-  if(!c){el.innerHTML='<p class="muted small" style="margin-top:12px">Aucun CSV charge. La liaison avec tes articles (prix de revient, coefficient) sera indisponible.</p>';return}
+  const c=store.csv,el=document.getElementById('csvInfo'),dz=document.getElementById('dzCsv');
+  if(!c){el.innerHTML='<span class="muted">Aucun export charge</span>';dz.classList.remove('done');return}
+  const d=new Date(c.date),today=d.toDateString()===new Date().toDateString();
   const withCost=c.items.filter(i=>i.cout!=null).length;
-  const costLine=c.hasCost
-    ?`<b style="color:var(--down)">Colonne prix de revient detectee</b> : ${withCost} articles avec PR. C'est la reference de comparaison des factures.`
-    :`<b style="color:var(--accent2)">Pas de colonne prix de revient dans ce fichier.</b> Reexporte tes articles depuis le back-office Lightspeed en incluant le prix de revient. En attendant, la reference utilisee est le dernier prix facture connu (referentiel).`;
-  el.innerHTML=`<div class="card"><b>${esc(c.name)}</b> : charge le ${new Date(c.date).toLocaleDateString('fr-FR')}, ${c.items.length} articles.<br>
-  <span class="small">${costLine}</span></div>`;
+  dz.classList.add('done');
+  el.innerHTML=`<span class="ok">✓ ${esc(c.name)}</span> · ${c.items.length} articles${c.hasCost?', '+withCost+' avec PR':''}<br>`+
+    (today?'<span class="muted">charge aujourd\'hui</span>':`<span class="ko">charge le ${d.toLocaleDateString('fr-FR')} : reexporte avant de mettre a jour Lightspeed</span>`)+
+    (c.hasCost?'':'<br><span class="ko">pas de colonne Prix de revient dans ce fichier</span>');
 }
 
 /* ---------- Matching (nom + contenance) ---------- */
@@ -308,6 +329,8 @@ async function handlePdf(file){
 /* ---------- Rendu analyse facture ---------- */
 let current=null;
 function renderFacture(products,meta,fname){
+  document.getElementById('dzPdf').classList.add('done');
+  document.getElementById('pdfInfo').innerHTML=`<span class="ok">\u2713 Facture ${esc(meta.num||'?')}</span> \u00B7 ${esc(meta.date||'')} \u00B7 ${products.length} lignes`;
   const ref=store.ref,map=store.map,csv=store.csv;
   current={products,meta,fname};
   let up=0,down=0,flat=0,nw=0;
@@ -333,7 +356,13 @@ function renderFacture(products,meta,fname){
       if(lk)pool.set(lk.sku,lk);
       pool.forEach(it=>{opts+=`<option value="${esc(it.sku)}" ${it.sku===linked?'selected':''}>${esc(it.nom)}${it.cout!=null?' | PR '+fmt(it.cout):''}</option>`});
     }
-    const coef=lk&&lk.prix&&p.px?(lk.prix/p.px):null;
+    // Nouveau prix de vente : par defaut le PV actuel ; suggestion = garder le meme coefficient qu'avant
+    if(lk&&p.newPv===undefined)p.newPv=lk.prix;
+    const pv=lk?p.newPv:null;
+    let sugg=null;
+    if(lk&&lk.prix&&lk.cout&&p.px&&!p.gratuit&&Math.abs(p.px-lk.cout)>=0.0005)sugg=Math.ceil(lk.prix/lk.cout*p.px*10-1e-9)/10;
+    const pvChanged=lk&&pv!=null&&lk.prix!=null&&Math.abs(pv-lk.prix)>=0.005;
+    const coef=pv&&p.px?(pv/p.px):null;
     return `<tr>
       <td class="num muted">${esc(p.code)}</td>
       <td>${esc(p.designation)}${p.gratuit?' <span class="pill new">gratuite</span>':''}</td>
@@ -341,6 +370,7 @@ function renderFacture(products,meta,fname){
       <td class="num muted">${refPrice!=null?fmt(refPrice)+' \u20AC':'-'}<br><span class="small">${refSrc}</span></td>
       <td><span class="pill ${cls}">${lbl}</span></td>
       <td><select data-i="${i}" class="linksel">${opts}</select></td>
+      <td class="num">${lk?`<input class="pxedit pvedit${pvChanged?' pvchg':''}" data-i="${i}" value="${pv!=null?pv.toFixed(2).replace('.',','):''}">${lk.prix!=null?`<br><span class="small muted">actuel ${fmt(lk.prix)}</span>`:''}${sugg!=null&&Math.abs(sugg-(pv||0))>=0.005?`<br><a href="#" class="small sugg" data-i="${i}" data-v="${sugg}">coef maintenu : ${fmt(sugg)}</a>`:''}`:'<span class="muted">-</span>'}</td>
       <td class="num ${coef&&coef<3?'coef-low':''}">${coef?'\u00D7'+coef.toFixed(1):'-'}</td>
     </tr>`;
   }).join('');
@@ -357,21 +387,32 @@ function renderFacture(products,meta,fname){
     <div class="muted small">Facture ${esc(meta.num||'?')} \u00B7 ${esc(meta.date||'')} \u00B7 ${esc(fname)}</div>
   </div>
   <div class="card" style="overflow-x:auto">
-  <table><thead><tr><th>Code</th><th>Designation fournisseur</th><th class="num">PX.U.NET (\u20AC HT)</th><th class="num">Reference</th><th>Evolution</th><th>Article Lightspeed lie</th><th class="num">Coef</th></tr></thead>
+  <table><thead><tr><th>Code</th><th>Designation fournisseur</th><th class="num">PX.U.NET (\u20AC HT)</th><th class="num">Reference</th><th>Evolution</th><th>Article Lightspeed lie</th><th class="num">Nouveau PV (TTC)</th><th class="num">Coef</th></tr></thead>
   <tbody>${rows}</tbody></table></div>
   <div class="row">
-    <button class="btn" id="btnSaveRef">Enregistrer ces prix dans le referentiel</button>
-    <button class="btn ghost" id="btnExportCosts">Fichier d'import articles Lightspeed</button>
-    <span class="muted small">Les liaisons sont memorisees : c'est a faire une seule fois par produit. Coef = prix de vente TTC / cout HT.</span>
-  </div>`;
+    <button class="btn ghost" id="btnSaveRef">Enregistrer ces prix dans le referentiel</button>
+    <button class="btn" id="btnExportCosts">Fichier pour Lightspeed "File import" (PR + PV)</button>
+    <button class="btn ghost" id="btnPrList">Liste des PR (saisie manuelle)</button>
+  </div>
+  <p class="muted small">Liaisons memorisees : une seule fois par produit. Coef = prix de vente TTC / cout HT. Le fichier est a importer dans Lightspeed par Import, <b>File import</b>. Jamais dans "Price only".</p>
+  <div id="prList"></div>`;
   document.getElementById('btnSaveRef').onclick=saveToRef;
+  document.getElementById('btnPrList').onclick=showPrList;
   document.getElementById('btnExportCosts').onclick=exportNewCosts;
+  document.querySelectorAll('.pvedit').forEach(inp=>inp.onchange=e=>{
+    const v=parseFr(e.target.value);current.products[+e.target.dataset.i].newPv=isNaN(v)?null:v;
+    renderFacture(current.products,current.meta,current.fname);
+  });
+  document.querySelectorAll('.sugg').forEach(a=>a.onclick=e=>{
+    e.preventDefault();current.products[+a.dataset.i].newPv=parseFloat(a.dataset.v);
+    renderFacture(current.products,current.meta,current.fname);
+  });
   document.querySelectorAll('.linksel').forEach(s=>s.onchange=e=>{
     const m=store.map;const p=current.products[+e.target.dataset.i];
     if(e.target.value)m[p.code]=e.target.value;else delete m[p.code];
     store.map=m;renderFacture(current.products,current.meta,current.fname);
   });
-  document.querySelectorAll('.pxedit').forEach(inp=>inp.onchange=e=>{
+  document.querySelectorAll('.pxedit:not(.pvedit)').forEach(inp=>inp.onchange=e=>{
     current.products[+e.target.dataset.i].px=parseFr(e.target.value);
     renderFacture(current.products,current.meta,current.fname);
   });
@@ -387,53 +428,100 @@ function saveToRef(){
     r.prix=p.px;r.designation=p.designation||r.designation;r.date=d;
     ref[p.code]=r;n++;
   });
-  store.ref=ref;updateRefCount();toast(n+' prix enregistres dans le referentiel');
+  store.ref=ref;updateRefCount();renderRef();toast(n+' prix enregistres dans le referentiel');
 }
 
 function exportNewCosts(){
   let raw=null;try{raw=JSON.parse(localStorage.getItem('ct_raw'))}catch(e){}
-  if(!raw||raw.iCost<0||raw.iPrix==null||raw.iPrix<0){toast('Recharge un export Lightspeed frais (avec Prix de revient) dans l\'onglet dedie');return}
-  // Garde-fou : le fichier est calque sur l'export charge (en-tetes, langue, valeurs).
-  // S'il n'est pas du jour, le Back Office peut ne plus reconnaitre les colonnes et effacer des prix.
+  if(!raw||raw.iCost<0||raw.iPrix==null||raw.iPrix<0){toast('Charge d\'abord un export Lightspeed avec la colonne Prix de revient (case 1)');return}
+  // Garde-fou : le fichier est calque sur l'export charge. Il doit etre du jour pour ne pas ecraser des modifs faites entre-temps.
   const loaded=raw.loaded?new Date(raw.loaded):null;
-  const today=new Date().toDateString();
-  if(!loaded||loaded.toDateString()!==today){
-    alert(`L'export Lightspeed charge (${raw.name||'?'}) date du ${loaded?loaded.toLocaleDateString('fr-FR'):'?'}.\n\nExporte tes articles depuis le Back Office maintenant, recharge-le dans l'onglet CSV Lightspeed, puis regenere le fichier.\n\nUn fichier base sur un ancien export peut avoir des en-tetes que Lightspeed ne reconnait pas, et effacer des prix de vente.`);
+  if(!loaded||loaded.toDateString()!==new Date().toDateString()){
+    alert(`L'export Lightspeed charge (${raw.name||'?'}) date du ${loaded?loaded.toLocaleDateString('fr-FR'):'?'}.\n\nExporte tes articles depuis le Back Office maintenant, glisse-le dans la case 1, puis regenere le fichier.`);
     return;
   }
   const map=store.map;
   const bySku={};raw.rows.forEach(r=>{const k=String(r[raw.iSku]).trim();if(!bySku[k])bySku[k]=r});
   const parents=new Set(raw.parents||[]);
-  const out=[raw.header];const done=new Set();let n=0,skip=0,combo=0,noPv=[];
-  // un meme article Lightspeed lie a plusieurs lignes facture avec des prix differents : ambigu, exclu
-  const pxBySku={};current.products.forEach(p=>{const s=map[p.code];if(!s||p.px==null||isNaN(p.px)||p.gratuit)return;(pxBySku[s]=pxBySku[s]||new Set()).add(p.px.toFixed(4))});
-  const conflicts=Object.keys(pxBySku).filter(s=>pxBySku[s].size>1);
-  if(conflicts.length)alert('Articles exclus car lies a plusieurs lignes de la facture avec des prix differents (verifie les liaisons) :\n- '+conflicts.map(s=>(bySku[s]?bySku[s][1]:s)+' : '+[...pxBySku[s]].join(' / ')).join('\n- '));
+  const num=v=>{const n=parseFloat(String(v==null?'':v).replace(',','.'));return isNaN(n)?null:n};
+  // regroupe les lignes facture par article Lightspeed et detecte les conflits
+  const per={};
   current.products.forEach(p=>{
-    const sku=map[p.code];if(!sku||p.px==null||isNaN(p.px)||p.gratuit)return;
-    if(done.has(sku)||conflicts.includes(sku))return;
-    const r=bySku[sku];if(!r)return;
-    if(parents.has(sku)){combo++;return}   // article compose (choix/combo) : jamais reimporte
-    if(String(r[raw.iPrix]==null?'':r[raw.iPrix]).trim()===''){noPv.push(r[1]);return}  // PV vide dans l'export : on ne reimporte pas un article sans prix
-    const old=parseFloat(String(r[raw.iCost]).replace(',','.'));
-    if(!isNaN(old)&&Math.abs(old-p.px)<0.0005){skip++;return}
-    const row=r.map(v=>v==null?'':String(v));row[raw.iCost]=p.px.toFixed(4);
-    out.push(row);done.add(sku);n++;
+    const sku=map[p.code];if(!sku||!bySku[sku])return;
+    const o=per[sku]||(per[sku]={pr:new Set(),pv:new Set()});
+    if(p.px!=null&&!isNaN(p.px)&&!p.gratuit)o.pr.add(p.px.toFixed(4));
+    if(p.newPv!=null&&!isNaN(p.newPv))o.pv.add(p.newPv.toFixed(2));
   });
-  if(noPv.length)alert('Articles exclus car leur prix par defaut est vide dans l\'export (a corriger d\'abord dans le Back Office) :\n- '+noPv.join('\n- '));
-  if(!n){toast(skip?'Tous les prix de revient lies sont deja a jour':'Aucune ligne a exporter');return}
+  const out=[raw.header],recap=[],excl=[];let combo=0;
+  Object.keys(per).forEach(sku=>{
+    const o=per[sku],r=bySku[sku],nom=r[1];
+    if(parents.has(sku)){combo++;return}
+    if(o.pr.size>1||o.pv.size>1){excl.push(nom+' : lie a plusieurs lignes avec des prix differents');return}
+    const oldPr=num(r[raw.iCost]),oldPv=num(r[raw.iPrix]);
+    const newPr=o.pr.size?parseFloat([...o.pr][0]):oldPr;
+    const newPv=o.pv.size?parseFloat([...o.pv][0]):oldPv;
+    if(newPv==null||!(newPv>0)){excl.push(nom+' : pas de prix de vente (saisis-le dans "Nouveau PV")');return}
+    const prChg=newPr!=null&&(oldPr==null||Math.abs(newPr-oldPr)>=0.0005);
+    const pvChg=oldPv==null||Math.abs(newPv-oldPv)>=0.005;
+    if(!prChg&&!pvChg)return;
+    const row=r.map(v=>v==null?'':String(v));
+    if(prChg)row[raw.iCost]=newPr.toFixed(4);
+    if(pvChg)row[raw.iPrix]=newPv.toFixed(2);   // PV inchange : valeur d'origine conservee telle quelle
+    out.push(row);
+    recap.push(`${nom}${prChg?`  PR ${fmt(oldPr)} -> ${fmt(newPr)}`:''}${pvChg?`  PV ${fmt(oldPv)} -> ${fmt(newPv)}`:''}`);
+  });
+  if(excl.length)alert('Articles exclus :\n- '+excl.join('\n- '));
+  if(!recap.length){toast('Rien a mettre a jour : prix de revient et prix de vente deja a jour');return}
+  if(!confirm(`${recap.length} article(s) vont etre mis a jour dans Lightspeed :\n\n${recap.join('\n')}${combo?`\n\n(${combo} article(s) compose(s) ignore(s))`:''}\n\nGenerer le fichier ?`))return;
+  const ws=XLSX.utils.aoa_to_sheet(out);const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Sheet0');
   const d=(current.meta.date||'').replace(/\//g,'-');
-  const base=`import-prix-revient${current.meta.num?'-'+current.meta.num:''}${d?'-'+d:''}`;
-  if(raw.fmt==='csv'){
-    // meme format que l'export du Back Office : point-virgule, CRLF, sans BOM
-    const cell=v=>/[;"\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
-    const txt=out.map(r=>r.map(v=>cell(String(v))).join(';')).join('\r\n')+'\r\n';
-    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv'}));a.download=base+'.csv';a.click();
-  }else{
-    const ws=XLSX.utils.aoa_to_sheet(out);const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,ws,'Sheet0');XLSX.writeFile(wb,base+'.xlsx');
-  }
-  toast(n+' article(s) a mettre a jour'+(skip?', '+skip+' deja a jour':'')+(combo?', '+combo+' compose(s) ignore(s)':''));
+  XLSX.writeFile(wb,`file-import-lightspeed${current.meta.num?'-'+current.meta.num:''}${d?'-'+d:''}.xlsx`);
+  toast(recap.length+' article(s) dans le fichier');
+}
+
+/* ---------- Export CSV "Importer les prix" (meme format que l'export des prix Lightspeed) ---------- */
+function exportPriceCsv(){
+  const map=store.map,csv=store.csv;
+  if(!csv){toast('Charge d\'abord ton export Lightspeed');return}
+  const bySku={};const conflict=new Set();
+  current.products.forEach(p=>{
+    const sku=map[p.code];if(!sku||p.newPv==null||isNaN(p.newPv))return;
+    const it=csv.items.find(x=>x.sku===sku);if(!it)return;
+    if(it.prix!=null&&Math.abs(p.newPv-it.prix)<0.005)return;       // inchange
+    if(bySku[sku]&&Math.abs(bySku[sku].pv-p.newPv)>=0.005)conflict.add(sku);
+    bySku[sku]={sku,nom:it.nom,old:it.prix,pv:p.newPv};
+  });
+  conflict.forEach(s=>delete bySku[s]);
+  if(conflict.size)alert('Exclus (lies a plusieurs lignes avec des prix differents) :\n- '+[...conflict].join('\n- '));
+  const lines=Object.values(bySku);
+  if(!lines.length){toast('Aucun prix de vente modifie. Change un "Nouveau PV" dans le tableau.');return}
+  const bad=lines.filter(l=>!(l.pv>0));
+  if(bad.length){alert('Prix invalide (vide ou 0) pour : '+bad.map(l=>l.nom).join(', ')+'\nCorrige avant d\'exporter.');return}
+  const recap=lines.map(l=>`${l.nom} : ${fmt(l.old)} -> ${fmt(l.pv)} \u20AC`).join('\n');
+  if(!confirm(`${lines.length} prix de vente vont changer dans Lightspeed :\n\n${recap}\n\nGenerer le fichier ?`))return;
+  const txt='SKU;Nom;Prix\r\n'+lines.map(l=>`${l.sku};${String(l.nom).replace(/;/g,',')};${l.pv.toFixed(2)}`).join('\r\n')+'\r\n';
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv'}));
+  a.download=`import-prix-vente${current.meta.num?'-'+current.meta.num:''}.csv`;a.click();
+  toast(lines.length+' prix de vente exportes');
+}
+
+/* ---------- Liste des prix de revient a saisir a la main ---------- */
+function showPrList(){
+  const map=store.map,csv=store.csv,el=document.getElementById('prList');
+  if(!csv){toast('Charge d\'abord ton export Lightspeed');return}
+  const seen={};const rows=[];
+  current.products.forEach(p=>{
+    const sku=map[p.code];if(!sku||p.px==null||isNaN(p.px)||p.gratuit||seen[sku])return;
+    const it=csv.items.find(x=>x.sku===sku);if(!it)return;
+    if(it.cout!=null&&Math.abs(it.cout-p.px)<0.0005)return;
+    seen[sku]=1;rows.push({nom:it.nom,sku,old:it.cout,neu:p.px});
+  });
+  if(!rows.length){el.innerHTML='<div class="card small">Tous les prix de revient lies sont deja a jour.</div>';return}
+  el.innerHTML=`<div class="card"><b>Prix de revient a saisir dans les fiches articles Lightspeed</b>
+  <table><thead><tr><th>Article</th><th>SKU</th><th class="num">PR actuel</th><th class="num">Nouveau PR</th></tr></thead><tbody>
+  ${rows.map(r=>`<tr><td>${esc(r.nom)}</td><td class="muted">${esc(r.sku)}</td><td class="num muted">${fmt(r.old)}</td><td class="num"><b>${String(r.neu.toFixed(3)).replace('.',',')}</b></td></tr>`).join('')}
+  </tbody></table></div>`;
 }
 
 /* ---------- Référentiel ---------- */
@@ -468,7 +556,7 @@ document.getElementById('btnExportRef').onclick=()=>{
 };
 
 /* ---------- Init ---------- */
-renderCsvInfo();updateRefCount();
+renderCsvInfo();updateRefCount();renderRef();
 </script>
 </body>
 </html>
