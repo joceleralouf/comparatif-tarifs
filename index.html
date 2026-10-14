@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Comparatif Tarifs — Le Bar du Crystal</title>
+<title>Comparatif Tarifs · Le Bar du Crystal</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -74,7 +74,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px}
 
 <!-- ===================== TAB FACTURE ===================== -->
 <div class="tab on" id="tab-facture">
-  <div class="dz" id="dzPdf">Glisse une <b>facture PDF</b> ici (ou clique)<br><span class="small">Format MD Boissons — extraction du code, désignation et PX.U.NET</span></div>
+  <div class="dz" id="dzPdf">Glisse une <b>facture PDF</b> ici (ou clique)<br><span class="small">Format MD Boissons · extraction du code, désignation et PX.U.NET</span></div>
   <input type="file" id="filePdf" accept=".pdf" hidden>
   <div id="factureResult"></div>
 </div>
@@ -114,7 +114,7 @@ const store={
 };
 
 /* ---------- Utils ---------- */
-const fmt=n=>n==null||isNaN(n)?'—':n.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:3});
+const fmt=n=>n==null||isNaN(n)?'-':n.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:3});
 const parseFr=s=>{if(!s)return NaN;s=String(s).trim();let neg=/-$/.test(s)||/^-/.test(s);s=s.replace(/-/g,'').replace(/\s/g,'').replace(/\./g,'').replace(',','.');let n=parseFloat(s);return neg?-n:n};
 const norm=s=>String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
 const STOP=new Set(['vc','vp','pet','cl','l','pack','carton','cais','caisse','bouteille','perdue','boite','x','de','du','le','la','cs','allem','roth','bit','war','sa','pur','bp']);
@@ -171,6 +171,11 @@ function ingestRows(rows,fname){
     cout:iCost>=0?num(r[iCost]):null
   })).filter(x=>x.sku&&x.nom);
   store.csv={name:fname,date:new Date().toISOString(),items,hasCost:iCost>=0};
+  // export brut pour le fichier d'import : articles principaux seulement (les lignes "SKU parent" sont des compositions de choix)
+  const iParent=head.findIndex(h=>h.includes('sku')&&h.includes('parent'));
+  const isMain=r=>String(r[iSku]==null?'':r[iSku]).trim()!==''&&String(r[iNom]==null?'':r[iNom]).trim()!==''&&(iParent<0||String(r[iParent]==null?'':r[iParent]).trim()==='');
+  const parents=iParent<0?[]:[...new Set(rows.slice(1).map(r=>String(r[iParent]==null?'':r[iParent]).trim()).filter(Boolean))];
+  try{localStorage.setItem('ct_raw',JSON.stringify({header:rows[0],iSku,iCost,parents,rows:rows.slice(1).filter(isMain)}))}catch(e){toast('Export trop volumineux pour la memoire du navigateur')}
   renderCsvInfo();
   toast(items.length+' articles charges'+(iCost>=0?' (avec prix de revient)':''));
 }
@@ -292,7 +297,7 @@ async function handlePdf(file){
         products.push({code,designation:desig,px,gratuit});
       });
     }
-    if(!headerFound){el.innerHTML='<div class="warn">Colonnes CODE / PX.U.NET introuvables — format non reconnu ou PDF scanné (image). L\'outil ne lit que les PDF natifs MD Boissons.</div>';return}
+    if(!headerFound){el.innerHTML='<div class="warn">Colonnes CODE / PX.U.NET introuvables · format non reconnu ou PDF scanné (image). L\'outil ne lit que les PDF natifs MD Boissons.</div>';return}
     if(!products.length){el.innerHTML='<div class="warn">Aucune ligne produit détectée dans ce PDF.</div>';return}
     const seenC={},clean=[];
     products.forEach(p=>{if(seenC[p.code])return;seenC[p.code]=1;clean.push(p)});
@@ -356,7 +361,7 @@ function renderFacture(products,meta,fname){
   <tbody>${rows}</tbody></table></div>
   <div class="row">
     <button class="btn" id="btnSaveRef">Enregistrer ces prix dans le referentiel</button>
-    <button class="btn ghost" id="btnExportCosts">Exporter les nouveaux prix de revient (CSV)</button>
+    <button class="btn ghost" id="btnExportCosts">Fichier d'import articles Lightspeed (.xlsx)</button>
     <span class="muted small">Les liaisons sont memorisees : c'est a faire une seule fois par produit. Coef = prix de vente TTC / cout HT.</span>
   </div>`;
   document.getElementById('btnSaveRef').onclick=saveToRef;
@@ -386,17 +391,28 @@ function saveToRef(){
 }
 
 function exportNewCosts(){
-  const map=store.map,csv=store.csv;
-  if(!csv){toast('Charge d\'abord le CSV Lightspeed');return}
-  let out='\uFEFFSKU;Nom;Prix de revient actuel;Nouveau prix de revient (facture)\n';let n=0;
+  let raw=null;try{raw=JSON.parse(localStorage.getItem('ct_raw'))}catch(e){}
+  if(!raw||raw.iCost<0){toast('Recharge ton export XLSX Lightspeed (avec Prix de revient) dans l\'onglet dedie');return}
+  const map=store.map;
+  const bySku={};raw.rows.forEach(r=>{const k=String(r[raw.iSku]).trim();if(!bySku[k])bySku[k]=r});
+  const parents=new Set(raw.parents||[]);
+  const out=[raw.header];const done=new Set();let n=0,skip=0,combo=0;
   current.products.forEach(p=>{
-    const sku=map[p.code];if(!sku||p.px==null||p.gratuit)return;
-    const it=csv.items.find(x=>x.sku===sku);if(!it)return;
-    out+=`${it.sku};${String(it.nom).replace(/;/g,',')};${it.cout!=null?String(it.cout).replace('.',','):''};${String(p.px).replace('.',',')}\n`;n++;
+    const sku=map[p.code];if(!sku||p.px==null||isNaN(p.px)||p.gratuit)return;
+    if(done.has(sku))return;
+    const r=bySku[sku];if(!r)return;
+    if(parents.has(sku)){combo++;return}   // article compose (choix/combo) : jamais reimporte, sa composition serait perdue
+    const old=parseFloat(String(r[raw.iCost]).replace(',','.'));
+    if(!isNaN(old)&&Math.abs(old-p.px)<0.0005){skip++;return}   // inchange : on ne touche pas
+    const row=r.slice();row[raw.iCost]=p.px.toFixed(4);
+    out.push(row);done.add(sku);n++;
   });
-  if(!n){toast('Aucune ligne liee a exporter');return}
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([out],{type:'text/csv'}));a.download='prix-de-revient-maj.csv';a.click();
-  toast(n+' lignes exportees');
+  if(!n){toast(skip?'Tous les prix de revient lies sont deja a jour':'Aucune ligne liee a exporter');return}
+  const ws=XLSX.utils.aoa_to_sheet(out);const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Sheet0');
+  const d=(current.meta.date||'').replace(/\//g,'-');
+  XLSX.writeFile(wb,`import-prix-revient${current.meta.num?'-'+current.meta.num:''}${d?'-'+d:''}.xlsx`);
+  toast(n+' article(s) a mettre a jour'+(skip?', '+skip+' deja a jour':'')+(combo?', '+combo+' article(s) compose(s) ignore(s)':''));
 }
 
 /* ---------- Référentiel ---------- */
@@ -414,8 +430,8 @@ function renderRef(){
     return `<tr><td class="num muted">${esc(c)}</td>
     <td>${esc(r.designation)}${hist?`<details><summary>historique</summary><div class="hist">${esc(hist)}</div></details>`:''}</td>
     <td class="num">${fmt(r.prix)} €</td><td class="muted small">${esc(r.date||'')}</td>
-    <td class="small">${lk?esc(lk.nom)+' ('+fmt(lk.prix)+' €)':'—'}</td>
-    <td class="num ${coef&&coef<3?'coef-low':''}">${coef?'×'+coef.toFixed(1):'—'}</td>
+    <td class="small">${lk?esc(lk.nom)+' ('+fmt(lk.prix)+' €)':'-'}</td>
+    <td class="num ${coef&&coef<3?'coef-low':''}">${coef?'×'+coef.toFixed(1):'-'}</td>
     <td><button class="btn ghost sm" data-del="${esc(c)}">✕</button></td></tr>`;
   }).join('');
   document.getElementById('refTable').innerHTML=`<table><thead><tr><th>Code</th><th>Désignation</th><th class="num">Dernier coût HT</th><th>Date</th><th>Article Lightspeed</th><th class="num">Coef</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
