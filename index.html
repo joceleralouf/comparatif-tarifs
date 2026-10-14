@@ -149,13 +149,13 @@ function handleCsv(file){
       const wb=XLSX.read(buf,{type:'array'});
       const ws=wb.Sheets[wb.SheetNames[0]];
       const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
-      ingestRows(rows,file.name);
+      ingestRows(rows,file.name,'xlsx');
     }).catch(e=>toast('Lecture XLSX impossible : '+e.message));
   }else{
-    Papa.parse(file,{delimiter:';',skipEmptyLines:true,complete:res=>ingestRows(res.data,file.name)});
+    Papa.parse(file,{delimiter:';',skipEmptyLines:true,complete:res=>ingestRows(res.data,file.name,'csv')});
   }
 }
-function ingestRows(rows,fname){
+function ingestRows(rows,fname,fmtIn){
   if(!rows||!rows.length){toast('Fichier vide ou illisible');return}
   const head=rows[0].map(h=>norm(h));
   const iSku=head.findIndex(h=>h.includes('sku')&&!h.includes('parent'));
@@ -175,7 +175,7 @@ function ingestRows(rows,fname){
   const iParent=head.findIndex(h=>h.includes('sku')&&h.includes('parent'));
   const isMain=r=>String(r[iSku]==null?'':r[iSku]).trim()!==''&&String(r[iNom]==null?'':r[iNom]).trim()!==''&&(iParent<0||String(r[iParent]==null?'':r[iParent]).trim()==='');
   const parents=iParent<0?[]:[...new Set(rows.slice(1).map(r=>String(r[iParent]==null?'':r[iParent]).trim()).filter(Boolean))];
-  try{localStorage.setItem('ct_raw',JSON.stringify({header:rows[0],iSku,iCost,parents,rows:rows.slice(1).filter(isMain)}))}catch(e){toast('Export trop volumineux pour la memoire du navigateur')}
+  try{localStorage.setItem('ct_raw',JSON.stringify({header:rows[0],iSku,iCost,iPrix,parents,fmt:fmtIn||'xlsx',name:fname,loaded:new Date().toISOString(),rows:rows.slice(1).filter(isMain)}))}catch(e){toast('Export trop volumineux pour la memoire du navigateur')}
   renderCsvInfo();
   toast(items.length+' articles charges'+(iCost>=0?' (avec prix de revient)':''));
 }
@@ -361,7 +361,7 @@ function renderFacture(products,meta,fname){
   <tbody>${rows}</tbody></table></div>
   <div class="row">
     <button class="btn" id="btnSaveRef">Enregistrer ces prix dans le referentiel</button>
-    <button class="btn ghost" id="btnExportCosts">Fichier d'import articles Lightspeed (.xlsx)</button>
+    <button class="btn ghost" id="btnExportCosts">Fichier d'import articles Lightspeed</button>
     <span class="muted small">Les liaisons sont memorisees : c'est a faire une seule fois par produit. Coef = prix de vente TTC / cout HT.</span>
   </div>`;
   document.getElementById('btnSaveRef').onclick=saveToRef;
@@ -392,27 +392,48 @@ function saveToRef(){
 
 function exportNewCosts(){
   let raw=null;try{raw=JSON.parse(localStorage.getItem('ct_raw'))}catch(e){}
-  if(!raw||raw.iCost<0){toast('Recharge ton export XLSX Lightspeed (avec Prix de revient) dans l\'onglet dedie');return}
+  if(!raw||raw.iCost<0||raw.iPrix==null||raw.iPrix<0){toast('Recharge un export Lightspeed frais (avec Prix de revient) dans l\'onglet dedie');return}
+  // Garde-fou : le fichier est calque sur l'export charge (en-tetes, langue, valeurs).
+  // S'il n'est pas du jour, le Back Office peut ne plus reconnaitre les colonnes et effacer des prix.
+  const loaded=raw.loaded?new Date(raw.loaded):null;
+  const today=new Date().toDateString();
+  if(!loaded||loaded.toDateString()!==today){
+    alert(`L'export Lightspeed charge (${raw.name||'?'}) date du ${loaded?loaded.toLocaleDateString('fr-FR'):'?'}.\n\nExporte tes articles depuis le Back Office maintenant, recharge-le dans l'onglet CSV Lightspeed, puis regenere le fichier.\n\nUn fichier base sur un ancien export peut avoir des en-tetes que Lightspeed ne reconnait pas, et effacer des prix de vente.`);
+    return;
+  }
   const map=store.map;
   const bySku={};raw.rows.forEach(r=>{const k=String(r[raw.iSku]).trim();if(!bySku[k])bySku[k]=r});
   const parents=new Set(raw.parents||[]);
-  const out=[raw.header];const done=new Set();let n=0,skip=0,combo=0;
+  const out=[raw.header];const done=new Set();let n=0,skip=0,combo=0,noPv=[];
+  // un meme article Lightspeed lie a plusieurs lignes facture avec des prix differents : ambigu, exclu
+  const pxBySku={};current.products.forEach(p=>{const s=map[p.code];if(!s||p.px==null||isNaN(p.px)||p.gratuit)return;(pxBySku[s]=pxBySku[s]||new Set()).add(p.px.toFixed(4))});
+  const conflicts=Object.keys(pxBySku).filter(s=>pxBySku[s].size>1);
+  if(conflicts.length)alert('Articles exclus car lies a plusieurs lignes de la facture avec des prix differents (verifie les liaisons) :\n- '+conflicts.map(s=>(bySku[s]?bySku[s][1]:s)+' : '+[...pxBySku[s]].join(' / ')).join('\n- '));
   current.products.forEach(p=>{
     const sku=map[p.code];if(!sku||p.px==null||isNaN(p.px)||p.gratuit)return;
-    if(done.has(sku))return;
+    if(done.has(sku)||conflicts.includes(sku))return;
     const r=bySku[sku];if(!r)return;
-    if(parents.has(sku)){combo++;return}   // article compose (choix/combo) : jamais reimporte, sa composition serait perdue
+    if(parents.has(sku)){combo++;return}   // article compose (choix/combo) : jamais reimporte
+    if(String(r[raw.iPrix]==null?'':r[raw.iPrix]).trim()===''){noPv.push(r[1]);return}  // PV vide dans l'export : on ne reimporte pas un article sans prix
     const old=parseFloat(String(r[raw.iCost]).replace(',','.'));
-    if(!isNaN(old)&&Math.abs(old-p.px)<0.0005){skip++;return}   // inchange : on ne touche pas
-    const row=r.slice();row[raw.iCost]=p.px.toFixed(4);
+    if(!isNaN(old)&&Math.abs(old-p.px)<0.0005){skip++;return}
+    const row=r.map(v=>v==null?'':String(v));row[raw.iCost]=p.px.toFixed(4);
     out.push(row);done.add(sku);n++;
   });
-  if(!n){toast(skip?'Tous les prix de revient lies sont deja a jour':'Aucune ligne liee a exporter');return}
-  const ws=XLSX.utils.aoa_to_sheet(out);const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Sheet0');
+  if(noPv.length)alert('Articles exclus car leur prix par defaut est vide dans l\'export (a corriger d\'abord dans le Back Office) :\n- '+noPv.join('\n- '));
+  if(!n){toast(skip?'Tous les prix de revient lies sont deja a jour':'Aucune ligne a exporter');return}
   const d=(current.meta.date||'').replace(/\//g,'-');
-  XLSX.writeFile(wb,`import-prix-revient${current.meta.num?'-'+current.meta.num:''}${d?'-'+d:''}.xlsx`);
-  toast(n+' article(s) a mettre a jour'+(skip?', '+skip+' deja a jour':'')+(combo?', '+combo+' article(s) compose(s) ignore(s)':''));
+  const base=`import-prix-revient${current.meta.num?'-'+current.meta.num:''}${d?'-'+d:''}`;
+  if(raw.fmt==='csv'){
+    // meme format que l'export du Back Office : point-virgule, CRLF, sans BOM
+    const cell=v=>/[;"\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
+    const txt=out.map(r=>r.map(v=>cell(String(v))).join(';')).join('\r\n')+'\r\n';
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv'}));a.download=base+'.csv';a.click();
+  }else{
+    const ws=XLSX.utils.aoa_to_sheet(out);const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'Sheet0');XLSX.writeFile(wb,base+'.xlsx');
+  }
+  toast(n+' article(s) a mettre a jour'+(skip?', '+skip+' deja a jour':'')+(combo?', '+combo+' compose(s) ignore(s)':''));
 }
 
 /* ---------- Référentiel ---------- */
